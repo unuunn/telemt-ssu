@@ -32,10 +32,12 @@ git clone https://github.com/telemt/telemt
 cd telemt
 # Starting Release Build
 cargo build --release
-# Allow execution
-chmod +x ./target/release/telemt
+# Move to /bin
+mv ./target/release/telemt /bin
+# Make executable
+chmod +x /bin/telemt
 # Lets go!
-./target/release/telemt config.toml
+telemt config.toml
 ```
 
 ## How to use?
