@@ -70,17 +70,18 @@ WantedBy=multi-user.target
 - Tokio's asynchronous architecture
 
 ## Roadmap
-- Zero-copy, minimal allocs on hotpath
+- Public IP in links
 - Config Reload-on-fly
-- No global mutable state
+- Bind to device or IP for outbound/inbound connections
+- Adtag Support per SNI / Secret
 - Fail-fast on start + Fail-soft on runtime (only WARN/ERROR)
+- Zero-copy, minimal allocs on hotpath
+- DC Healthchecks + global fallback
+- No global mutable state
 - Client isolation
 - Backpressure-aware IO
 - "Secret Policy" - SNI / Secret Routing :D
-- Adtag Support per SNI / Secret
-- DC Healthchecks + global fallback
 - Multi-upstream Balancer and Failover
-- Bind to device or IP for outbound/inbound connections
 - Strict FSM per handshake
 - Session-based Antireplay with Sliding window, non-broking reconnects
 - Web Control: statistic, state of health, latency, client experience...
