@@ -135,11 +135,17 @@ then Ctrl+X -> Y -> Enter to save
 - high entropy, which is normal for AES-encrypted traffic;
 ### Whitelist on IP
 - MTProxy cannot work when there is: 
-  - no IP connectivity to the target host
+  - no IP connectivity to the target host: Russian Whitelist on Mobile Networks - "Белый список"
   - OR all TCP traffic is blocked
-  - OR all TLS traffic is blocked,
+  - OR high entropy/encrypted traffic is blocked: content filters at universities and critical infrastructure
+  - OR all TLS traffic is blocked
+  - OR specified port is blocked: use 443 to make it "like real"
+  - OR provided SNI is blocked: use "officially approved"/innocuous name
 - like most protocols on the Internet; 
-- this situation is observed in China behind the Great Chinese Firewall and in Russia on mobile networks
+- these situations are observed:
+  - in China behind the Great Firewall
+  - in Russia on mobile networks, less in wired networks
+  - in Iran during "activity"
 
 ## Why Rust?
 - Long-running reliability and idempotent behavior
