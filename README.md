@@ -255,7 +255,7 @@ we transparently direct traffic to the target host!
 - Based on this: if `telemt` configured correctly, **TLS mode is completely identical to real-life handshake + communication** with a specified host
 - Here is our evidence:
   - 212.220.88.77 - "dummy" host, running `telemt`
-  - `petrovich.ru` - `tls` + `masking` host
+  - `petrovich.ru` - `tls` + `masking` host, in HEX: `706574726f766963682e7275`
   - client WITH secret-key accesses the MTProxy resource:
   <img width="360" height="439" alt="telemt" src="https://github.com/user-attachments/assets/39352afb-4a11-4ecc-9d91-9e8cfb20607d" />
   
