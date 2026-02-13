@@ -26,7 +26,7 @@ const ME_ACTIVE_PING_SECS: u64 = 25;
 
 pub struct MePool {
     pub(super) registry: Arc<ConnRegistry>,
-    pub(super) writers: Arc<RwLock<Vec<Arc<Mutex<RpcWriter>>>>>,
+    pub(super) writers: Arc<RwLock<Vec<(SocketAddr, Arc<Mutex<RpcWriter>>)>>> ,
     pub(super) rr: AtomicU64,
     pub(super) proxy_tag: Option<Vec<u8>>,
     proxy_secret: Vec<u8>,
@@ -82,7 +82,8 @@ impl MePool {
         }
     }
 
-    fn writers_arc(&self) -> Arc<RwLock<Vec<Arc<Mutex<RpcWriter>>>>> {
+    fn writers_arc(&self) -> Arc<RwLock<Vec<(SocketAddr, Arc<Mutex<RpcWriter>>)>>>
+    {
         self.writers.clone()
     }
 
@@ -348,7 +349,7 @@ impl MePool {
             iv: write_iv,
             seq_no: 0,
         }));
-        self.writers.write().await.push(rpc_w.clone());
+        self.writers.write().await.push((addr, rpc_w.clone()));
 
         let reg = self.registry.clone();
         let w_pong = rpc_w.clone();
@@ -362,7 +363,7 @@ impl MePool {
                 warn!(error = %e, "ME reader ended");
             }
             let mut ws = w_pool.write().await;
-            ws.retain(|w| !Arc::ptr_eq(w, &w_pong));
+            ws.retain(|(_, w)| !Arc::ptr_eq(w, &w_pong));
             info!(remaining = ws.len(), "Dead ME writer removed from pool");
         });
         tokio::spawn(async move {
@@ -376,7 +377,7 @@ impl MePool {
                 if let Err(e) = w_ping.lock().await.send(&p).await {
                     debug!(error = %e, "Active ME ping failed, removing dead writer");
                     let mut ws = w_pool_ping.write().await;
-                    ws.retain(|w| !Arc::ptr_eq(w, &w_ping));
+                    ws.retain(|(_, w)| !Arc::ptr_eq(w, &w_ping));
                     break;
                 }
             }

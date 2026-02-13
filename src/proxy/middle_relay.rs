@@ -61,7 +61,14 @@ where
                     Ok(Some(payload)) => {
                         trace!(conn_id, bytes = payload.len(), "C->ME frame");
                         stats.add_user_octets_from(&user, payload.len() as u64);
-                        me_pool.send_proxy_req(conn_id, peer, translated_local_addr, &payload, proto_flags).await?;
+                        me_pool.send_proxy_req(
+                            conn_id,
+                            success.dc_idx,
+                            peer,
+                            translated_local_addr,
+                            &payload,
+                            proto_flags,
+                        ).await?;
                     }
                     Ok(None) => {
                         debug!(conn_id, "Client EOF");
