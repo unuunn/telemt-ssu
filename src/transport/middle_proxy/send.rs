@@ -6,11 +6,13 @@ use tokio::sync::Mutex;
 use tracing::{debug, warn};
 
 use crate::error::{ProxyError, Result};
-use crate::protocol::constants::{RPC_CLOSE_EXT_U32};
+use crate::protocol::constants::RPC_CLOSE_EXT_U32;
 
 use super::MePool;
 use super::codec::RpcWriter;
 use super::wire::build_proxy_req_payload;
+use crate::crypto::SecureRandom;
+use rand::seq::SliceRandom;
 
 impl MePool {
     pub async fn send_proxy_req(
@@ -39,9 +41,28 @@ impl MePool {
             let writers: Vec<(SocketAddr, Arc<Mutex<RpcWriter>>)> = ws.iter().cloned().collect();
             drop(ws);
 
-            let candidate_indices = self.candidate_indices_for_dc(&writers, target_dc).await;
+            let mut candidate_indices = self.candidate_indices_for_dc(&writers, target_dc).await;
             if candidate_indices.is_empty() {
-                return Err(ProxyError::Proxy("No ME writers available for target DC".into()));
+                // Emergency: try to connect to target DC addresses on the fly, then recompute writers
+                let map = self.proxy_map_v4.read().await;
+                if let Some(addrs) = map.get(&(target_dc as i32)) {
+                    let mut shuffled = addrs.clone();
+                    shuffled.shuffle(&mut rand::rng());
+                    drop(map);
+                    for (ip, port) in shuffled {
+                        let addr = SocketAddr::new(ip, port);
+                        if self.connect_one(addr, &SecureRandom::new()).await.is_ok() {
+                            break;
+                        }
+                    }
+                    let ws2 = self.writers.read().await;
+                    let writers: Vec<(SocketAddr, Arc<Mutex<RpcWriter>>)> = ws2.iter().cloned().collect();
+                    drop(ws2);
+                    candidate_indices = self.candidate_indices_for_dc(&writers, target_dc).await;
+                }
+                if candidate_indices.is_empty() {
+                    return Err(ProxyError::Proxy("No ME writers available for target DC".into()));
+                }
             }
             let start = self.rr.fetch_add(1, Ordering::Relaxed) as usize % candidate_indices.len();
 
@@ -85,10 +106,7 @@ impl MePool {
     }
 
     pub async fn send_close(&self, conn_id: u64) -> Result<()> {
-        let ws = self.writers.read().await;
-        if !ws.is_empty() {
-            let w = ws[0].1.clone();
-            drop(ws);
+        if let Some(w) = self.registry.get_writer(conn_id).await {
             let mut p = Vec::with_capacity(12);
             p.extend_from_slice(&RPC_CLOSE_EXT_U32.to_le_bytes());
             p.extend_from_slice(&conn_id.to_le_bytes());
@@ -97,6 +115,8 @@ impl MePool {
                 let mut ws = self.writers.write().await;
                 ws.retain(|(_, o)| !Arc::ptr_eq(o, &w));
             }
+        } else {
+            debug!(conn_id, "ME close skipped (writer missing)");
         }
 
         self.registry.unregister(conn_id).await;

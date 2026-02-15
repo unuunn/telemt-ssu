@@ -10,6 +10,7 @@ use crate::error::Result;
 
 use super::MePool;
 use super::secret::download_proxy_secret;
+use crate::crypto::SecureRandom;
 
 #[derive(Debug, Clone, Default)]
 pub struct ProxyConfigData {
@@ -49,8 +50,10 @@ pub async fn fetch_proxy_config(url: &str) -> Result<ProxyConfigData> {
     Ok(ProxyConfigData { map, default_dc })
 }
 
-pub async fn me_config_updater(pool: Arc<MePool>, interval: Duration) {
+pub async fn me_config_updater(pool: Arc<MePool>, rng: Arc<SecureRandom>, interval: Duration) {
     let mut tick = tokio::time::interval(interval);
+    // skip immediate tick to avoid double-fetch right after startup
+    tick.tick().await;
     loop {
         tick.tick().await;
 
@@ -61,7 +64,8 @@ pub async fn me_config_updater(pool: Arc<MePool>, interval: Duration) {
                 pool.default_dc.store(dc, std::sync::atomic::Ordering::Relaxed);
             }
             if changed {
-                info!("ME config updated (v4)");
+                info!("ME config updated (v4), reconciling connections");
+                pool.reconcile_connections(&rng).await;
             } else {
                 debug!("ME config v4 unchanged");
             }

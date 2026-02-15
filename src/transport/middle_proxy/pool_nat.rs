@@ -145,7 +145,7 @@ async fn fetch_stun_binding(stun_addr: &str) -> Result<Option<std::net::SocketAd
     req[0..2].copy_from_slice(&0x0001u16.to_be_bytes()); // Binding Request
     req[2..4].copy_from_slice(&0u16.to_be_bytes()); // length
     req[4..8].copy_from_slice(&0x2112A442u32.to_be_bytes()); // magic cookie
-    rand::thread_rng().fill_bytes(&mut req[8..20]);
+    rand::rng().fill_bytes(&mut req[8..20]);
 
     socket
         .send(&req)

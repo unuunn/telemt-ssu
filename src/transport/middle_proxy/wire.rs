@@ -58,7 +58,7 @@ pub(crate) fn build_proxy_req_payload(
     append_mapped_addr_and_port(&mut b, client_addr);
     append_mapped_addr_and_port(&mut b, our_addr);
 
-    if proto_flags & 12 != 0 {
+    if proto_flags & RPC_FLAG_HAS_AD_TAG != 0 {
         let extra_start = b.len();
         b.extend_from_slice(&0u32.to_le_bytes());
 

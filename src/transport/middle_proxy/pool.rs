@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use bytes::BytesMut;
 use rand::Rng;
+use rand::seq::SliceRandom;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::{Mutex, RwLock};
@@ -89,6 +90,30 @@ impl MePool {
         self.writers.clone()
     }
 
+    pub async fn reconcile_connections(&self, rng: &SecureRandom) {
+        use std::collections::HashSet;
+        let map = self.proxy_map_v4.read().await.clone();
+        let writers = self.writers.read().await;
+        let current: HashSet<SocketAddr> = writers.iter().map(|(a, _)| *a).collect();
+        drop(writers);
+
+        for (_dc, addrs) in map.iter() {
+            let dc_addrs: Vec<SocketAddr> = addrs
+                .iter()
+                .map(|(ip, port)| SocketAddr::new(*ip, *port))
+                .collect();
+            if !dc_addrs.iter().any(|a| current.contains(a)) {
+                let mut shuffled = dc_addrs.clone();
+                shuffled.shuffle(&mut rand::rng());
+                for addr in shuffled {
+                    if self.connect_one(addr, rng).await.is_ok() {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
     pub async fn update_proxy_maps(
         &self,
         new_v4: HashMap<i32, Vec<(IpAddr, u16)>>,
@@ -127,8 +152,9 @@ impl MePool {
     }
 
     pub async fn reconnect_all(&self) {
-        let mut ws = self.writers.write().await;
-        ws.clear();
+        // Graceful: do not drop all at once. New connections will use updated secret.
+        // Existing writers remain until health monitor replaces them.
+        // No-op here to avoid total outage.
     }
 
     async fn key_selector(&self) -> u32 {
@@ -151,30 +177,39 @@ impl MePool {
             "Initializing ME pool"
         );
 
-        // Ensure at least one connection per DC
+        // Ensure at least one connection per DC with failover over all addresses
         for (dc, addrs) in map.iter() {
             if addrs.is_empty() {
                 continue;
             }
-            // round-robin first address
-            let &(ip, port) = addrs.get(0).unwrap();
-            let addr = SocketAddr::new(ip, port);
-            match self.connect_one(addr, rng).await {
-                Ok(()) => info!(%addr, dc = %dc, "ME connected"),
-                Err(e) => warn!(%addr, dc = %dc, error = %e, "ME connect failed"),
+            let mut connected = false;
+            let mut shuffled = addrs.clone();
+            shuffled.shuffle(&mut rand::rng());
+            for (ip, port) in shuffled {
+                let addr = SocketAddr::new(ip, port);
+                match self.connect_one(addr, rng).await {
+                    Ok(()) => {
+                        info!(%addr, dc = %dc, "ME connected");
+                        connected = true;
+                        break;
+                    }
+                    Err(e) => warn!(%addr, dc = %dc, error = %e, "ME connect failed, trying next"),
+                }
+            }
+            if !connected {
+                warn!(dc = %dc, "All ME servers for DC failed at init");
             }
         }
 
-        // Additional connections up to pool_size total
+        // Additional connections up to pool_size total (round-robin across DCs)
         for (dc, addrs) in map.iter() {
-            for (i, (ip, port)) in addrs.iter().enumerate().skip(1) {
+            for (ip, port) in addrs {
                 if self.connection_count() >= pool_size {
                     break;
                 }
                 let addr = SocketAddr::new(*ip, *port);
-                match self.connect_one(addr, rng).await {
-                    Ok(()) => info!(%addr, dc = %dc, idx = i, "ME connected"),
-                    Err(e) => warn!(%addr, dc = %dc, idx = i, error = %e, "ME connect failed"),
+                if let Err(e) = self.connect_one(addr, rng).await {
+                    debug!(%addr, dc = %dc, error = %e, "Extra ME connect failed");
                 }
             }
             if self.connection_count() >= pool_size {
@@ -189,7 +224,7 @@ impl MePool {
     }
 
     pub(crate) async fn connect_one(
-        self: &Arc<Self>,
+        &self,
         addr: SocketAddr,
         rng: &SecureRandom,
     ) -> Result<()> {
