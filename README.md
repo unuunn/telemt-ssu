@@ -17,18 +17,23 @@
 - с новым подходом к безопасности и асинхронности  
 - с высокоточной диагностикой криптографии через `ME_DIAG`  
 
-Для использования нужно указать:
+Для использования нужно:
+0. Версия `telemt` ≥3.0.0
+1. Выполнение любого из наборов условий:
+   - публичный IP для исходящих соединений установлен на интерфейса инстанса с `telemt`
+     - ЛИБО
+   - вы используете NAT 1:1 + включили STUN-пробинг
+2. В конфиге, в секции `[general]` указать:
 ```toml
 use_middle_proxy = true
 ```
 
-в версии `telemt` 3.0.0 и последующих, при выполнении любого набора условий:
-- публичный IP для исходящих соединений установлен на интерфейса инстанса с `telemt`
-- вы используете NAT 1:1 + включили STUN-пробинг
-
-Если нет:
-1. Установите `use_middle_proxy = false` или Middle-End Proxy будет выключен автоматически по таймауту, но это займёт больше времени при запуске
-2. Пропишите в конец конфига
+Если условия из пункта 1 не выполняются:
+1. Выключите ME-режим:
+   - установите `use_middle_proxy = false`
+     - ЛИБО
+   - Middle-End Proxy будет выключен автоматически по таймауту, но это займёт больше времени при запуске
+2. В конфиге, добавьте в конец:
 ```toml
 [dc_overrides]
 "203" = "91.105.192.100:443"
@@ -48,17 +53,25 @@ On February 15, we released `telemt 3` with support for Middle-End Proxy, which 
 - new approach to security and asynchronicity  
 - high-precision cryptography diagnostics via `ME_DIAG`  
 
-To use it, set:
+To use this feature, the following requirements must be met:
+0. `telemt` version ≥ 3.0.0  
+1. One of the following conditions satisfied:
+   - the instance running `telemt` has a public IP address assigned to its network interface for outbound connections  
+     - OR
+   - you are using 1:1 NAT and have STUN probing enabled  
+
+3. In the config file, under the `[general]` section, specify:
 ```toml
 use_middle_proxy = true
-```
-in version `telemt` 3.0.0 or later, if any set of conditions is met:
-- public IP for outgoing connections is set on the instance interface with `telemt`
-- you are using NAT 1:1 + enabled STUN-probe
+````
 
-If not:
-1. set `use_middle_proxy = false` or Middle-End Proxy will be turned off automatically by timeout, but it will take longer at startup
-2. Place to the end of your config
+If the conditions from step 1 are not satisfied:
+1. Disable Middle-End mode:
+   - set `use_middle_proxy = false`
+     - OR
+   - Middle-End Proxy will be disabled automatically after a timeout, but this will increase startup time
+
+2. In the config file, add the following at the end:
 ```toml
 [dc_overrides]
 "203" = "91.105.192.100:443"
